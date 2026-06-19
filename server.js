@@ -29,19 +29,30 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 if (isProduction) {
   // A. Strict Production Security
-  app.use(helmet());
+  // A. Strict Production Security (with Vercel safety fallbacks)
   
-  // Reads the allowed domain from your Render dashboard settings; falls back to a default if missing
-  const allowedOrigins = [process.env.ALLOWED_ORIGIN || 'https://your-app.vercel.app'];
-
+  app.use(helmet({
+    contentSecurityPolicy: false, // Prevents strict CSP from blocking cross-origin serverless fetches
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
+  
   app.use(cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, server-to-server, or local tools)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+
+      // Secure checks: Allow local development, your explicit ALLOWED_ORIGIN, or any Vercel domain
+      const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+      const isExplicitOrigin = origin === process.env.ALLOWED_ORIGIN;
+      const isVercelSubdomain = origin.endsWith('.vercel.app'); // Safely permits your frontend Vercel link
+
+      if (isLocalhost || isExplicitOrigin || isVercelSubdomain) {
+        return callback(null, true);
+      } else {
+        const msg = 'CORS policy block on production.';
         return callback(new Error(msg), false);
       }
-      return callback(null, true);
     }
   }));
 
